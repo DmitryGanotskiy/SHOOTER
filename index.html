@@ -1,0 +1,969 @@
+
+
+<link rel="stylesheet" href="style.css" />
+<img src="img/rifle/aim1.png" style="position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+<div class="health"><span>100</span></div>
+<div class="shoot"><span>50</span></div>
+
+<script
+  async
+  src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"
+></script>
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.150.1/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/"
+    }
+  }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.117.1/examples/jsm/loaders/FBXLoader.js"></script>
+<script src="Sounds.js"></script>
+
+<script type="module">
+  import * as THREE from 'https://unpkg.com/three@0.150.1/build/three.module.js';
+  import { OrbitControls } from 'https://unpkg.com/three@0.150.1/examples/jsm/controls/OrbitControls.js';
+  import { PointerLockControls } from 'https://unpkg.com/three@0.150.1/examples/jsm/controls/PointerLockControls.js';
+  import { GLTFLoader } from 'https://unpkg.com/three@0.150.1/examples/jsm/loaders/GLTFLoader.js';
+  import { VectorKeyframeTrack } from "three";
+  import Stats from 'three/addons/libs/stats.module.js';
+  import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+class Enemy {
+  constructor(scene, camera, sounds, person) {
+    this.scene = scene;
+    this.camera = camera;
+    this.person = person
+    this.model = null;
+    this.mixer = null;
+    this.animations = {};
+    this.speed =  0.0000000000000000001 - 0.000000000000000000001
+    this.canLook = true
+    this.health = 100;
+    this.gravity = 0.8; // m/s^2
+    this.yVelocity = 0; // m/s
+    this.onGround = false;
+    this.currentAnimation = null;
+    this.sounds = sounds
+    this.canCreate = true
+    this.isCreated = false
+    this.loader = new FBXLoader();
+    this.loader.setPath('img/player/');
+  }
+
+  LoadModel(){
+    this.loader.load(this.person+'.fbx', 
+      (fbx) => { // onLoad
+        fbx.scale.setScalar(0.05);
+        fbx.traverse(c => {c.castShadow = true});
+
+        this.model = fbx;
+        this.model.position.set(Math.random() * 150 - 75, 3, Math.random() * 150 - 75);
+
+        this.mixer = new THREE.AnimationMixer(this.model);
+
+        // After the model is loaded, load the animations
+        if(this.person == "player"){
+          this.LoadAnimation('idle', false); // true means this animation will play by default
+          this.LoadAnimation('jump', false);
+          this.LoadAnimation('run', false);
+          this.LoadAnimation('death', false);
+          this.LoadAnimation('attack2', false);
+          this.LoadAnimation('attack1', false);
+          this.LoadAnimation('attack3', false);
+        }
+      },
+      undefined, // onProgress
+      function (error) { // onError
+        console.log('An error occurred while loading the model');
+      }
+    );
+  }
+
+  LoadAnimation(animation, isDefault = false) {
+    const anim = new FBXLoader();
+    anim.setPath('img/player/');
+    anim.load(animation + '.fbx', 
+      (anim) => { // onLoad
+        console.log(anim.animations); // print the animations
+
+        this.animations[animation] = this.mixer.clipAction(anim.animations[0]);
+        if (isDefault) {
+          this.animations[animation].play();
+        }
+      },
+      undefined, // onProgress
+      function (error) { // onError
+        console.log('An error occurred while loading the animation:');
+      }
+    );
+  }
+
+playAnimation(animation, shouldLoop) {
+    // Check if the requested animation is already playing
+    if (this.animations[animation] && this.animations[animation].isPlaying) {
+      return;
+    }
+
+    // Check if there's an animation currently playing
+    if (this.currentAnimation) {
+      // If so, stop the current animation
+      this.animations[this.currentAnimation].stop();
+    }
+  
+    // Now play the requested animation
+    if (this.animations[animation]) {
+      // If the animation is 'death', we want it to stop at the final frame
+      if (animation === 'death') {
+        this.animations[animation].setLoop(THREE.LoopOnce, 0);
+        this.animations[animation].clampWhenFinished = true; // This prevents the animation from automatically resetting to the beginning pose
+      } else {
+        this.animations[animation].setLoop(shouldLoop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+      }
+      this.animations[animation].play();
+      // Update the current animation
+      this.currentAnimation = animation;
+    }
+  }
+
+  moveTowards(target) {
+    if (!this.model) return;
+
+    // Calculate the direction towards the target
+    const direction = new THREE.Vector3();
+    direction.subVectors(target, this.model.position).normalize();
+
+    // Calculate the amount to move
+    const distance = this.speed;
+
+    // Multiply the direction by the distance
+    direction.multiplyScalar(distance);
+
+    // Add the direction to the current position
+    this.model.position.x += direction.x;
+    this.model.position.z += direction.z;
+  }
+
+HealthBar(){
+    // Remove old health bar from the scene
+    if (this.healthBar) {
+      this.scene.remove(this.healthBar);
+      this.healthBar.geometry.dispose();
+      this.healthBar.material.dispose();
+    }
+      
+    // If health <= 0, remove enemy model from the scene
+    if (this.health <= 0) {
+      this.canLook = false;
+      this.isDead = true;
+      if (this.currentAnimation !== 'death') {
+        console.log('Playing death animation'); // Debugging
+        this.playAnimation('death', false);
+      }
+      this.speed = 0;
+      return; // Return here if health is zero or below
+    }
+      
+    // Create new health bar
+    let geometryHealth = new THREE.PlaneGeometry(this.health / 20, 0.5);
+    let materialHealth = new THREE.MeshBasicMaterial({ color: 'red', side: THREE.DoubleSide });
+    this.healthBar = new THREE.Mesh(geometryHealth, materialHealth);
+      
+    // Position and rotate the health bar above the enemy model
+    this.healthBar.position.copy(this.model.position);
+    this.healthBar.position.y += 11; // raise the health bar higher
+    this.healthBar.rotation.copy(this.model.rotation);
+      
+    // Add the health bar to the scene
+    this.scene.add(this.healthBar);
+  }
+
+  FindDistance(target) {
+    if (!this.model || !target) return;
+
+    let dx = this.model.position.x - target.position.x;
+    let dy = this.model.position.y - target.position.y;
+    let dz = this.model.position.z - target.position.z;
+
+    return Math.sqrt(dx * dx + dy * dy + dz * dz);
+  }
+
+DamagePlayer() {
+  const HealthElement = document.querySelector('.health span');
+  if (HealthElement) {
+    const currentHealth = parseInt(HealthElement.textContent);
+    const newHealth = currentHealth - 10;
+    HealthElement.innerHTML = newHealth;
+  }
+}
+
+  CameraCollision() {
+    let distance = this.FindDistance(this.camera);
+    
+    if(this.health > 0) {
+      if(distance <= 10) {
+        if (this.currentAnimation !== 'attack3') {
+          this.speed = 0;
+          this.playAnimation('attack3', true);
+          this.DamagePlayer()
+        }
+      } else if(distance > 10 && distance < 50) {
+        if (this.currentAnimation !== 'run') {
+          this.speed = 0.3;
+          this.playAnimation('run', true);
+        }
+      } else {
+        if (this.currentAnimation !== 'idle') {
+          this.speed = 0;
+          this.playAnimation('idle', true);
+        }
+      }
+    }
+  }
+
+  Update() {
+    if (this.mixer) {
+      this.mixer.update(0.01);
+    }
+    if (this.model) {
+      if(this.canLook) {
+        // Calculate rotation towards camera, but don't change y rotation.
+        let lookAtPos = new THREE.Vector3(this.camera.position.x, this.model.position.y, this.camera.position.z);
+        this.model.lookAt(lookAtPos);
+      }
+      this.moveTowards(this.camera.position, 1);
+      this.HealthBar();
+    }
+    this.CameraCollision();
+  }
+}
+
+class Dancing {
+  constructor(scene, position) {
+    this.scene = scene;
+    this.loader = new FBXLoader();
+    this.mixer = null;
+    this.position = position
+    this.danceAction = null;
+
+    this.loadModelAndAnimation();
+  }
+
+  loadModelAndAnimation() {
+    this.loader.load('img/player/girl.fbx', (model) => {
+      this.girl = model;
+      this.scene.add(this.girl);
+      this.girl.scale.set(0.1, 0.1, 0.1);
+      this.girl.position.set(this.position.x, this.position.y, this.position.z);
+      this.girl.rotation.set(0, this.position.rotationX, 0);
+      this.loader.load('img/player/dance2.fbx', (animation) => {
+        this.danceAnimation = animation.animations[0];
+
+        this.mixer = new THREE.AnimationMixer(this.girl);
+        this.danceAction = this.mixer.clipAction(this.danceAnimation);
+        this.danceAction.play();
+      });
+    });
+  }
+
+  update() {
+    if (this.mixer) {
+      this.mixer.update(0.008); // Use a fixed value (approx. 60 FPS) instead of delta
+    }
+  } 
+}
+
+class Bullet {
+  constructor(scene, camera, rifle, enemies, rectangles, arena) {
+    this.scene = scene;
+    this.camera = camera;
+    this.enemies = enemies;
+    this.velocity = new THREE.Vector3();
+    this.geometry = new THREE.SphereGeometry(0.04, 8, 8);
+    this.material = new THREE.MeshBasicMaterial({color: 'black'});
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.scene.add(this.mesh);
+    this.rifle = rifle
+    this.arena = arena
+    this.speed = 150; // Adjust as necessary
+    this.explosion = null;
+  }
+
+  Shoot() {
+    this.mesh.position.copy(this.rifle.model.position);
+    console.log("shoot is ok")
+    // Shoot the bullet in the direction the camera is facing.
+    this.velocity.copy(this.camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(this.speed));
+  }
+
+
+  Collision(object){
+    if(object.model){
+      this.mesh.updateMatrixWorld();
+      object.model.updateMatrixWorld();
+
+      // Create a bounding sphere for the bullet and the enemy.
+      let bulletBoundingSphere = new THREE.Box3().setFromObject(this.mesh).getBoundingSphere(new THREE.Sphere());
+      let enemyBoundingSphere = new THREE.Box3().setFromObject(object.model).getBoundingSphere(new THREE.Sphere());
+
+      // Check if the bullet has intersected the enemy.
+      if (bulletBoundingSphere.intersectsSphere(enemyBoundingSphere)) {
+        console.log('Bullet collided with enemy!');
+        this.scene.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        object.health -= 10
+      }
+    }
+  }
+  ArenaCollision() {
+    if (this.arena && this.mesh) {
+      // Create a bounding sphere for the bullet.
+      const bulletBoundingSphere = new THREE.Sphere().setFromPoints(this.mesh.geometry.attributes.position.array);
+
+      // Check collision with arena's ground mesh
+      const groundBoundingBox = new THREE.Box3().setFromObject(this.arena.collisionMeshes[0]);
+      if (bulletBoundingSphere.intersectsBox(groundBoundingBox)) {
+        console.log('Bullet collided with arena ground!');
+        this.scene.remove(this.mesh);
+        this.explosion = new Explosion(this.scene, this.mesh.position);
+        this.explosion.playExplosionAnimation(this.explosion.textureUrlsExplosion, 10, 20);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        return;
+      }
+
+      // Check collision with arena's wall mesh
+      const wallBoundingBox = new THREE.Box3().setFromObject(this.arena.collisionMeshes[1]);
+      if (bulletBoundingSphere.intersectsBox(wallBoundingBox)) {
+        console.log('Bullet collided with arena wall!');
+        this.scene.remove(this.mesh);
+        this.explosion = new Explosion(this.scene, this.mesh.position);
+        this.explosion.playExplosionAnimation(this.explosion.textureUrlsExplosion, 10, 20);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+        return;
+      }
+    }
+  }
+
+  Update(deltaTime) {
+    // Translate the bullet in the direction of its velocity.
+    this.mesh.position.add(this.velocity.clone().multiplyScalar(deltaTime));
+    
+    for (let i = this.enemies.length - 1; i >= 0; i--) {
+      const enemy = this.enemies[i];
+      this.Collision(enemy)
+    }
+    if (this.arena) {
+      this.ArenaCollision();
+    }
+  }
+}
+
+class Rifle {
+  constructor(scene, camera) {
+    this.scene = scene;
+    this.camera = camera;
+    this.model = null;
+    this.loader = new GLTFLoader();
+
+    this.Initialize('gun', {x: 0.03, y: 0.02, z: 0.02});
+  }
+
+  Initialize(gun, scale) {
+    this.loader.load(
+      'img/'+gun+'/scene.gltf',
+      (gltf) => {
+        this.model = gltf.scene;
+        this.model.position.set(0.1, -0.2, -1); // Position it to left side of the screen
+        this.model.scale.set(scale.x, scale.y, scale.z); // Scale it down a bit
+        this.model.boundingBox = new THREE.Box3().setFromObject(this.model); // Compute the bounding box
+        this.scene.add(this.model);
+
+        // Move the bullet creation here
+        let bullet = new Bullet(this.scene, this.camera, this);
+        bullet.Shoot();
+      },
+      undefined,
+      function (error) {
+        console.error(error);
+      }
+    );
+  }
+
+Update() {
+  if (this.model) {
+      const newPosition = new THREE.Vector3(0.1, -0.2, -0.3); // Fixed offset relative to the camera
+      newPosition.applyQuaternion(this.camera.quaternion);
+      newPosition.add(this.camera.position);
+
+      this.model.position.copy(newPosition);
+      this.model.rotation.copy(this.camera.rotation);
+      this.model.rotation.y = this.camera.rotation.y+Math.PI
+
+      // Create a vector in the direction the camera is facing
+      var direction = new THREE.Vector3();
+      this.camera.getWorldDirection(direction);
+
+      // Scale the direction vector and add it to the camera's position
+      var lookAtPos = direction.clone().multiplyScalar(10).add(this.camera.position);
+//
+    }
+  }
+}
+
+class Arena {
+  constructor(scene, filePath, scale) {
+    this.scene = scene;
+    this.filePath = filePath;
+    this.model = null;
+    this.scale = scale;
+    this.collisionMeshes = [];
+  }
+
+  LoadModel() {
+    const loader = new GLTFLoader();
+
+    loader.load(this.filePath, (gltf) => {
+      this.model = gltf.scene;
+      this.model.scale.set(this.scale.x, this.scale.y, this.scale.z);
+      this.scene.add(this.model);
+
+      // Create a circular ring geometry for the ground
+      let groundGeometry = new THREE.RingGeometry(0, 5, 32);
+      let groundMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+      let ground = new THREE.Mesh(groundGeometry, groundMaterial);
+      ground.rotation.x = Math.PI / 2;
+      ground.position.y = 0;
+      this.collisionMeshes.push(ground);
+
+      // Create a cylinder geometry for the arena walls and rotate it
+      let wallGeometry = new THREE.CylinderGeometry(100, 100, 70, 16, 16, true); // Adjust the parameters as needed
+      let wallMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, side: THREE.DoubleSide, transparent: true, opacity: 0 });
+      let wall = new THREE.Mesh(wallGeometry, wallMaterial);
+      wall.position.y = 25;
+      this.collisionMeshes.push(wall);
+
+      // Add the collision meshes to the scene
+      this.collisionMeshes.forEach(mesh => this.scene.add(mesh));
+
+    }, undefined, function (error) {
+      console.error(error);
+    });
+  }
+} 
+
+class Explosion {
+  constructor(scene, positionLook) {
+    this.textureUrlsExplosion = [
+      'img/explosion/img_0.png',
+      'img/explosion/img_2.png',
+      'img/explosion/img_4.png',
+      'img/explosion/img_6.png',
+      'img/explosion/img_8.png',
+      'img/explosion/img_10.png',
+      'img/explosion/img_12.png',
+      'img/explosion/img_14.png',
+      'img/explosion/img_16.png',
+      'img/explosion/img_18.png',
+      'img/explosion/img_20.png',
+      'img/explosion/img_22.png',
+      'img/explosion/img_24.png',
+      'img/explosion/img_26.png',
+      'img/explosion/img_28.png'
+    ];
+    this.scene = scene;
+    this.positionLook = positionLook
+  }
+
+  createExplosionContainer(images, size) {
+    const container = new THREE.Object3D(); // Container for all the image planes
+
+    // Load textures
+    const textureLoader = new THREE.TextureLoader();
+    const textures = images.map((imageUrl) => textureLoader.load(imageUrl));
+
+    // Create image planes and position them
+    textures.forEach((texture, index) => {
+      const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+      const geometry = new THREE.PlaneGeometry(size, size);
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Position the image plane based on the index and the specified position
+      mesh.position.copy(this.positionLook);
+
+      container.add(mesh); // Add the image plane to the container
+    });
+
+    // Add the container to the scene
+    this.scene.add(container);
+
+    return { container, textures };
+  }
+
+  updateAnimation(startTime, duration, explosionData) {
+    const { container, textures } = explosionData;
+
+    const elapsedTime = performance.now() - startTime;
+    const progress = elapsedTime / duration;
+    const frameIndex = Math.floor(progress * textures.length);
+
+    // Update the visibility of the image planes based on the current frame
+    container.children.forEach((mesh, index) => {
+      mesh.visible = index <= frameIndex;
+      mesh.lookAt(0,0,0);
+    });
+
+    if (frameIndex !== this.currentFrame) {
+      this.currentFrame = frameIndex;
+      // If you want to apply rotation to each image plane, uncomment the line below
+      // container.rotation.z = Math.random() * Math.PI * 2; // Random rotation on z-axis
+    }
+
+    if (elapsedTime < duration) {
+      requestAnimationFrame(() => this.updateAnimation(startTime, duration, explosionData));
+    } else {
+      // Remove the container from the scene after the animation duration
+      this.scene.remove(container);
+    }
+  }
+
+  playExplosionAnimation(images, size, duration, position) {
+    const explosionData = this.createExplosionContainer(images, size);
+
+    // Animation variables
+    this.currentFrame = 0;
+    const startTime = performance.now();
+
+    // Start the animation
+    this.updateAnimation(startTime, duration, explosionData);
+  }
+}
+
+class Thing {
+  constructor(scene, camera, filePath, scale = new THREE.Vector3(1, 1, 1), rotation = new THREE.Euler()) {
+    this.scene = scene;
+    this.camera = camera;
+    this.filePath = filePath;
+    this.model = null;
+  }
+
+LoadModel(position, scale, rotation) {
+  const loader = new GLTFLoader();
+
+  loader.load(this.filePath, (gltf) => {
+    this.model = gltf.scene;
+    this.model.position.copy(position);
+    this.model.scale.copy(scale);
+    this.model.rotation.copy(rotation);
+
+    // Check if the glTF model contains animations
+    if (gltf.animations && gltf.animations.length > 0) {
+      this.mixer = new THREE.AnimationMixer(this.model);
+      this.animations = gltf.animations;
+    }
+
+    this.scene.add(this.model);
+  }, undefined, function (error) {
+    console.error(error);
+  });
+}
+
+  removeFromScene() {
+    if (this.model) {
+      this.scene.remove(this.model);
+      this.model.traverse(child => {
+        if (child.isMesh) {
+          child.geometry.dispose();
+          child.material.dispose();
+        }
+      });
+      this.model = null;
+    }
+  }
+
+  getDistanceToCamera() {
+    if (this.model && this.camera) {
+      // Get the position of the Thing in world coordinates
+      const thingPosition = new THREE.Vector3();
+      this.model.getWorldPosition(thingPosition);
+
+      // Get the position of the camera in world coordinates
+      const cameraPosition = new THREE.Vector3();
+      this.camera.getWorldPosition(cameraPosition);
+
+      // Calculate the distance between the camera and the Thing
+      const distance = thingPosition.distanceTo(cameraPosition);
+      return distance;
+    }
+
+    return null; // Return null if the model or camera is not set
+  }
+}
+
+class BasicWorldDemo {
+  constructor(xDensity, numRectangles) {
+    this.moveForward = false;
+    this.moveBackward = false;
+    this.moveLeft = false;
+    this.jumpKey = false
+    this.canJump = false;
+    this.moveRight = false;
+    this.changeGun = false
+    this.velocity = new THREE.Vector3();
+    this.direction = new THREE.Vector3();
+    this.vertex = new THREE.Vector3();
+    this.color = new THREE.Color();
+    this.gravity = 0.1; // m/s^2
+    this.yVelocity = 0; // m/s
+    this.onGround = false;
+    this.bullets = [];
+    this.bullets.forEach(bullet => bullet.Update(0.02));
+    this.livingEnemies = [];
+    this.enemyCount = 2
+    this.killedEnemies =0;
+    this.sounds = new Sounds()
+    this.newThingCollected = false;
+    this.Initialize();
+  }
+
+  Initialize() {
+    this.threejs = new THREE.WebGLRenderer({
+      antialias: true,
+    });
+    this.threejs.shadowMap.enabled = true;
+    this.threejs.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.threejs.setPixelRatio(window.devicePixelRatio);
+    this.threejs.setSize(window.innerWidth, window.innerHeight);
+
+    document.body.appendChild(this.threejs.domElement);
+
+    window.addEventListener('resize', () => {
+      this.OnWindowResize();
+    }, false);
+
+    const fov = 60;
+    const aspect = 1920 / 1080;
+    const near = 0.1;
+    const far = 1000.0;
+    this.camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
+    this.camera.position.set(97, 10, 0);
+    this.camera.rotation.y = Math.PI/2
+
+    this.scene = new THREE.Scene();
+
+
+    let lightAmbient = new THREE.AmbientLight( 0x404040 );
+    this.scene.add(lightAmbient);
+
+    let light = new THREE.DirectionalLight(0xFFFFFF, 1.0);
+    light.position.set(20, 100, 10);
+    light.target.position.set(0, 0, 0);
+    light.castShadow = true;
+    light.shadow.bias = -0.001;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
+    light.shadow.camera.near = 0.1;
+    light.shadow.camera.far = 500.0;
+    light.shadow.camera.near = 0.5;
+    light.shadow.camera.far = 500.0;
+    light.shadow.camera.left = 100;
+    light.shadow.camera.right = -100;
+    light.shadow.camera.top = 100;
+    light.shadow.camera.bottom = -100;
+    this.scene.add(light);
+
+    light = new THREE.AmbientLight(0x101010);
+    this.scene.add(light);
+
+    this.rifle = new Rifle(this.scene, this.camera);
+    // Shoot a bullet
+
+    for(let i = 0; i < 6; i++){
+      let enemy = new Enemy(this.scene, this.camera, this.sounds, "player");
+      enemy.LoadModel();
+      this.livingEnemies.push(enemy);
+    }
+
+    const thingPosition = new THREE.Vector3(0, 1, 0);
+    const thingScale = new THREE.Vector3(0.005, 0.005, 0.005);
+    const thingRotation = new THREE.Euler(0, Math.PI / 2, 0);
+    this.newThing = new Thing(this.scene, this.camera, "img/bullet/scene.gltf");
+    this.newThing.LoadModel(thingPosition, thingScale, thingRotation);
+
+    const doorPosition1 = new THREE.Vector3(100, 2, 0);
+    const doorScale = new THREE.Vector3(0.1, 0.08, 0.1);
+    const doorRotation = new THREE.Euler(0, Math.PI / 2, 0);
+    this.newThingDoor1 = new Thing(this.scene, this.camera, "img/door/scene.gltf");
+    this.newThingDoor1.LoadModel(doorPosition1, doorScale, doorRotation);
+    
+    let texture1 = new THREE.TextureLoader().load('img/door/road.jpg');
+    let geometry2 = new THREE.PlaneGeometry(30, 40);
+    let material2 = new THREE.MeshBasicMaterial({map: texture1});
+    let mesh2 = new THREE.Mesh(geometry2, material2);
+    mesh2.position.set(99, 20, 0);
+    mesh2.rotation.y = -Math.PI / 2;
+    this.scene.add(mesh2);
+
+
+
+    const positions = [
+      { x: 110, y: 60, z: 10, rotationX: -Math.PI / 2},
+      { x: -110, y: 60, z: 10, rotationX: Math.PI / 2},
+      { x: 75, y: 60, z: 80, rotationX: -Math.PI},
+      { x: -75, y: 60, z: -80, rotationX: Math.PI},
+    ];
+    this.girls = positions.map(position => new Dancing(this.scene, position));
+    
+    let scale = {x: 18, y:20, z: 18}
+    this.arena = new Arena(this.scene, 'img/arena/scene.gltf', scale);
+    this.arena.LoadModel();
+
+    this.controls = new PointerLockControls(this.camera, this.threejs.domElement);
+
+    const onKeyDown = (event) => {
+      switch (event.keyCode) {
+        case 87: // w
+          this.moveForward = true;
+          break;
+
+        case 32: // space
+          this.jumpKey = true;
+        break;
+
+        case 81: // q
+          if(this.changeGun){
+            this.scene.remove(this.rifle.model)
+            this.rifle.Initialize('gun', {x: 0.03, y: 0.02, z: 0.02}); 
+            this.changeGun = false
+          }
+          else if(!this.changeGun){
+            this.scene.remove(this.rifle.model)
+            this.rifle.Initialize('rifle', {x: 1.5, y: 1.2, z: 1.2});
+            this.changeGun = true
+          }
+        break;
+
+        case 65: // a
+          this.moveLeft = true; 
+          break;
+
+        case 83: // s
+          this.moveBackward = true;
+          break;
+
+        case 68: // d
+          this.moveRight = true;
+          break;
+        case 81: 
+          break;
+      }
+    };
+
+    const onKeyUp = (event) => {
+      switch (event.keyCode) {
+        case 87: // w
+          this.moveForward = false;
+          break;
+
+        case 32: // space
+          this.jumpKey = false;
+          break;
+
+        case 65: // a
+          this.moveLeft = false;
+          break;
+
+        case 83: // s
+          this.moveBackward = false;
+          break;
+
+        case 68: // d
+          this.moveRight = false;
+          break;
+      }
+    };
+
+    this.threejs.domElement.addEventListener('click', () => {
+      this.controls.lock();
+      if (this.controls.isLocked) {
+        let bullet = new Bullet(this.scene, this.camera, this.rifle, this.livingEnemies, this.arena)
+        let ShootElement = document.querySelector('.shoot span');
+        let currentShoot = parseInt(ShootElement.textContent);
+        if (currentShoot > 0) {
+          bullet.Shoot();
+          const newShoot = currentShoot - 1;
+          ShootElement.textContent = newShoot; // Update the textContent of ShootElement
+          this.sounds.play('ambient', 'shoot');
+          this.bullets.push(bullet);
+        } else {
+          this.newThingCollected = false
+          this.newThing.LoadModel();
+        }
+      }
+    }, false);
+
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('keyup', onKeyUp);
+
+    const loader = new THREE.CubeTextureLoader();
+    const texture = loader.load([
+        './img/world/xpos.png',
+        './img/world/xneg.png',
+        './img/world/ypos.png',
+        './img/world/yneg.png',
+        './img/world/zpos.png',
+        './img/world/zneg.png',
+    ]);
+    this.scene.background = texture;
+
+    this.RAF();
+  }
+
+  OnWindowResize() {
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.updateProjectionMatrix();
+    this.threejs.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  removeEnemyFromLivingEnemies(enemy) {
+    const index = this.livingEnemies.indexOf(enemy);
+    if (index !== -1) {
+      this.livingEnemies.splice(index, 1);
+    }
+  }
+
+move() {
+  if (this.controls.isLocked === true) {
+       if (!this.arena.model) {
+      // Model is not yet loaded, return and wait for the next frame
+      return;
+    }
+    this.velocity.x -= this.velocity.x * 10.0 * 0.02;
+    this.velocity.z -= this.velocity.z * 10.0 * 0.02;
+
+    this.direction.z = Number(this.moveForward) - Number(this.moveBackward);
+    this.direction.x = Number(this.moveRight) - Number(this.moveLeft);
+    this.direction.normalize(); // Normalize the direction vector
+
+    if (this.moveForward || this.moveBackward){
+      this.velocity.z -= this.direction.z * 400.0 * 0.02;
+      this.sounds.play('ambient','walk')
+    }
+    if (this.moveLeft || this.moveRight){
+     this.velocity.x += this.direction.x * 400.0 * 0.02;
+     this.sounds.play('ambient','walk')
+   }
+
+    // Apply gravity
+    if (this.controls.getObject().position.y > 8) { // Adding a bit of tolerance
+      this.yVelocity -= this.gravity;
+      this.gravity += 0.05;
+    } else {
+      this.yVelocity = 0;
+      this.gravity = 0;
+      this.controls.getObject().position.y = 8;
+      this.canJump = true;
+    }
+
+    // Calculate the distance between the camera and the cylinder
+    const cameraPosition = this.controls.getObject().position;
+    const cylinderPosition = this.arena.model.position;
+    const distance = cameraPosition.distanceTo(cylinderPosition);
+
+    // Check if the camera is outside the cylinder (distance > 0)
+    if (distance > 100) {
+      // Calculate the direction from the camera to the center of the cylinder
+      const directionToCylinder = cylinderPosition.clone().sub(cameraPosition).normalize();
+
+      // Define the minimum distance (radius of the cylinder) to prevent the camera from going inside the cylinder
+      const minDistance = this.arena.model.scale.x * 0.5;
+
+      // If the distance is greater than the minimum distance, move the camera back inside the cylinder
+      if (distance > minDistance) {
+        const distanceToMove = 0.9;
+        const newPosition = cameraPosition.clone().add(directionToCylinder.multiplyScalar(distanceToMove));
+        this.controls.getObject().position.copy(newPosition);
+      }
+    }
+
+    let distanceToBullets = this.newThing.getDistanceToCamera();
+    if(distanceToBullets <=9 && !this.newThingCollected && this.newThing){
+      this.newThing.removeFromScene();
+      this.sounds.play('ambient', 'recharge');
+      let ShootElement = document.querySelector('.shoot span');
+      let currentShoot = parseInt(ShootElement.textContent);
+      const newShoot = currentShoot + 50;
+      ShootElement.textContent = newShoot;
+      this.newThingCollected = true;
+    }
+
+    // Handle jump
+    if (this.jumpKey && this.canJump === true) {
+      this.yVelocity += 50;  // Higher initial yVelocity for a smoother jump
+      this.canJump = false;  // Reset canJump to false
+    }
+
+    this.controls.getObject().position.y += this.yVelocity * 0.02;  // Apply the yVelocity
+    this.controls.getObject().translateX(this.velocity.x * 0.02); // Translate the character in the direction of velocity
+    this.controls.getObject().translateZ(this.velocity.z * 0.02);
+
+    this.threejs.render(this.scene, this.camera);
+  }
+}
+
+
+  Generate(){
+
+  }
+
+  RAF() {
+    requestAnimationFrame(() => {
+      this.move()
+      if(this.killedEnemies == 5)window.location.href = "Results.html"
+
+      if (this.rifle)this.rifle.Update();
+      this.bullets.forEach((bullet, index) => {
+      bullet.Update(0.02);
+
+        // Remove the bullet from the bullets array if it's been removed from the scene
+        if (!bullet.mesh.parent) {
+          this.bullets.splice(index, 1);
+        }
+      });
+
+      for (let i = 0; i<this.enemyCount; i++){
+        if(!this.isCreated && this.livingEnemies[i].model){
+          this.scene.add(this.livingEnemies[i].model);
+          this.livingEnemies[i].isCreated = true
+        }
+        this.livingEnemies[i].Update()
+      }
+
+      for (let i = 0; i<this.enemyCount; i++){
+        if(this.enemyCount < 6 &&
+           this.livingEnemies[i].canCreate &&
+           this.livingEnemies[i].health <= 0){
+          this.killedEnemies++;
+           localStorage.setItem('myNumber', this.killedEnemies)
+           this.enemyCount++;
+          
+          this.livingEnemies[i].canCreate = false
+        }
+      }
+    
+      this.girls.forEach(girl => girl.update())
+      this.RAF();
+    });
+  }
+}
+
+let APP = null;
+
+window.addEventListener('DOMContentLoaded', () => {
+  APP = new BasicWorldDemo(100, 500);
+});
+
+</script>
+

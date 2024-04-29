@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="icon" href="img/crusader.ico" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <script src="https://kit.fontawesome.com/ccbd4d6bc1.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="stylesheet.css" />
+  <title>Imperial Blitz</title>
+</head>
+<body>
+  <div id="customCursor"></div>
+  <div class="overlay" id="overlay"></div>
+  <div class="screen">
+    <video autoplay loop muted id="videoBackground">
+      <source src="img/back.mp4" type="video/mp4" />
+    </video>
+    <audio id="audioClick">
+      <source src="sounds/buttonclick.wav" type="audio/wav" />
+    </audio>
+    <audio id="audioHover">
+      <source src="sounds/buttonrollover.wav" type="audio/wav" />
+    </audio>
+    <audio id="audioRelease">
+      <source src="sounds/buttonclickrelease.wav" type="audio/wav" />
+    </audio>
+    <div class="menu">
+      <div class="title-container">
+        <h1>Imperial Blitz</h1>
+      </div>
+      <h3>Join the battle</h3>
+      <ul>
+        <li class="clickable"><a href="#" style="font-size: 30px;">Play</a></li>
+        <br>
+        <li class="clickable"><a href="#" style="font-size: 30px;">Results</a></li>
+      </ul>
+    </div>
+  </div>
+  <div id="sparks-container"></div>
+</body>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const quitLink = document.querySelector('a[href="#"]')
+  const clickableElements = document.querySelectorAll('.clickable')
+  const menu = document.querySelector('.screen')
+
+
+  function playClickSound() {
+    const audio = document.getElementById('audioClick')
+    audio.currentTime = 0
+    audio.play()
+  }
+
+  function playReleaseSound() {
+    const audio = document.getElementById('audioRelease')
+    audio.currentTime = 0
+    audio.play()
+  }
+
+  function playHoverSound() {
+    const audio = document.getElementById('audioHover')
+    audio.currentTime = 0
+    audio.play()
+  }
+
+  clickableElements.forEach((el) => {
+    el.addEventListener('click', () => {
+      playClickSound()
+      if (el.textContent === 'Play') {
+        window.location.href = "index.html"
+      }
+      if (el.textContent === 'Results') {
+        window.location.href = "Results.html"
+      }
+    });
+
+    el.addEventListener('mousedown', () => {
+      playReleaseSound();
+    });
+
+    el.addEventListener('mouseover', () => {
+      playHoverSound();
+    });
+  });
+});
+</script>
+</html>

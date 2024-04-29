@@ -1,0 +1,11 @@
+Model Information:
+* title:	357 magnum bullets
+* source:	https://sketchfab.com/3d-models/357-magnum-bullets-7b8da3b0b25840d3a65ebd6e6c7aca38
+* author:	Damian Joseph (https://sketchfab.com/Dmaanji.hopes)
+
+Model License:
+* license type:	CC-BY-SA-4.0 (http://creativecommons.org/licenses/by-sa/4.0/)
+* requirements:	Author must be credited. Modified versions must have the same license. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "357 magnum bullets" (https://sketchfab.com/3d-models/357-magnum-bullets-7b8da3b0b25840d3a65ebd6e6c7aca38) by Damian Joseph (https://sketchfab.com/Dmaanji.hopes) licensed under CC-BY-SA-4.0 (http://creativecommons.org/licenses/by-sa/4.0/)

@@ -1,0 +1,159 @@
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="img/crusader.ico" />
+    <title>Death Screen</title>
+<style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+
+      #death-animation {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      #bg-video {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        opacity: 0.5;
+      }
+
+      .shine-effect {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background-color: black;
+        opacity: 0;
+        animation: shine-effect 1s linear forwards;
+      }
+
+      @keyframes shine-effect {
+        0% {
+          opacity: 0;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      .content {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 1;
+      }
+
+      h1 {
+        color: black;
+        font-size: 5rem;
+        text-align: center;
+        text-shadow: 2px 2px black;
+      }
+
+      .animated-button {
+        margin-top: 2rem;
+        background-color: transparent;
+        border: 2px solid red;
+        border-radius: 0.3rem;
+        color: white;
+        padding: 1rem 2rem;
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease-in-out;
+      }
+
+      .animated-button:hover {
+        background-color: black;
+        color: white;
+        transform: translateY(-0.2rem);
+        box-shadow: 0px 0.5rem 1rem rgba(0, 0, 0, 0.2);
+      }
+
+.slider:hover {
+  opacity: 1;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: orange;
+  cursor: pointer;
+  box-shadow: 0 0 10px orange, 0 0 20px orange, 0 0 30px orange;
+}
+
+.slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: orange;
+  cursor: pointer;
+  box-shadow: 0 0 10px orange, 0 0 20px orange, 0 0 30px orange;
+}
+</style>
+
+  </head>
+  <body>
+    <div id="death-animation">
+      <video id="bg-video" src="img/back.mp4" autoplay loop muted></video>
+      <div class="shine-effect"></div>
+      <div class="content">
+        <h1>Results</h1>
+        <div class="menu">
+      <ul><h2>
+        <li class="clickable" id="kills">Kills: </a></li>
+      </ul></h2>
+    </div>
+        <button class="animated-button" onclick="location.href='main.html'">Back Home</button>
+      </div>
+    </div>
+    </body>
+
+    <script>
+      const deathAnimation = document.getElementById('death-animation')
+      const shineEffect = document.querySelector('.shine-effect')
+      const animatedButton = document.querySelector('.animated-button')
+
+      const myNumber = localStorage.getItem('myNumber')
+      const pointsElement = document.getElementById('kills')
+      pointsElement.textContent = `Kills: ${myNumber}`
+      console.log(myNumber)
+
+document.addEventListener('click', handleFirstInteraction)
+document.addEventListener('keydown', handleFirstInteraction)
+
+volumeSlider.addEventListener('input', function () {
+  backMusic.volume = volumeSlider.value
+})
+      setTimeout(() => {
+        deathAnimation.classList.add('show')
+        shineEffect.classList.add('animate')
+      }, 2000)
+
+      animatedButton.addEventListener('click', () => {
+        deathAnimation.classList.remove('show')
+        shineEffect.classList.remove('animate')
+      })
+    </script>
+</html

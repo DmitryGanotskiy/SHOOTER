@@ -1,0 +1,11 @@
+Model Information:
+* title:	Nemesis Sniper Rifle
+* source:	https://sketchfab.com/3d-models/nemesis-sniper-rifle-c68434f1190f48e1902be623971b4031
+* author:	CaptainToggle (https://sketchfab.com/CaptainToggle)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Nemesis Sniper Rifle" (https://sketchfab.com/3d-models/nemesis-sniper-rifle-c68434f1190f48e1902be623971b4031) by CaptainToggle (https://sketchfab.com/CaptainToggle) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
